@@ -95,41 +95,39 @@ def parse_schueler_datei(pfad: Path) -> Optional[str]:
 def konvertiere_zu_html_luecken(schueler_text: str, loesungen: list[dict]) -> str:
     """
     Konvertiert den Schülertext in HTML mit Input-Feldern für jede Lücke.
-    Die Lücken sind als __x____ⁿ⁾ markiert (Anfangsbuchstabe + hochgestellte Nummer).
+    Die Lücken sind als X____ⁿ⁾ markiert (Anfangsbuchstabe + Unterstriche + hochgestellte Nummer).
     """
     html = schueler_text
 
-    # Lücken-Pattern: __b____¹⁾ oder __b____1) etc.
-    # Ersetze durch <input>-Felder mit data-nr Attribut
+    # Hochgestellte Ziffern → normale Ziffern
+    HOCHGESTELLT = {"¹": "1", "²": "2", "³": "3", "⁴": "4", "⁵": "5",
+                    "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9", "⁰": "0"}
+
     def ersetze_luecke(match):
         volltext = match.group(0)
-        # Nummer extrahieren (hochgestellt oder normal)
-        nr_match = re.search(r'[¹²³⁴⁵⁶⁷⁸⁹⁰\d]+', volltext.replace("⁾", "").replace(")", ""))
-        if not nr_match:
+
+        # Anfangsbuchstabe: erstes Zeichen
+        anfang = volltext[0]
+
+        # Nummer: alles nach dem letzten Unterstrich, ⁾ entfernen
+        # Format: X___...___ⁿ⁾ (Buchstabe + Unterstriche + Zahl + ⁾)
+        nr_teil = re.sub(r'^[a-zA-ZäöüÄÖÜ]_+', '', volltext).rstrip('⁾)')
+        for h, n in HOCHGESTELLT.items():
+            nr_teil = nr_teil.replace(h, n)
+        try:
+            nr = int(nr_teil)
+        except ValueError:
             return volltext
-
-        nr_str = nr_match.group(0)
-        # Hochgestellte Ziffern konvertieren
-        hochgestellt = {"¹": "1", "²": "2", "³": "3", "⁴": "4", "⁵": "5",
-                        "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9", "⁰": "0"}
-        for h, n in hochgestellt.items():
-            nr_str = nr_str.replace(h, n)
-        nr = int(nr_str)
-
-        # Anfangsbuchstabe extrahieren
-        buchstaben_match = re.search(r'__([a-zA-ZäöüÄÖÜ])', volltext)
-        anfang = buchstaben_match.group(1) if buchstaben_match else ""
 
         return (
             f'<span class="luecke-wrapper">'
             f'<input type="text" class="luecke-input" data-nr="{nr}" '
             f'placeholder="{anfang}___" maxlength="30" autocomplete="off" spellcheck="false">'
-            f'<sup class="luecke-nr">{nr}</sup>'
             f'</span>'
         )
 
-    # Pattern für Lücken: __X____ⁿ⁾ oder __X____n)
-    pattern = r'__[a-zA-ZäöüÄÖÜ]____[¹²³⁴⁵⁶⁷⁸⁹⁰\d]+[⁾)]?'
+    # Pattern: Buchstabe + 1+ Unterstriche + hochgestellte/normale Zahl(en) + ⁾
+    pattern = r'[a-zA-Z\u00e4\u00f6\u00fc\u00c4\u00d6\u00dc]_+[\u00b9\u00b2\u00b3\u2074\u2075\u2076\u2077\u2078\u2079\u2070\d]+\u207e?'
     html = re.sub(pattern, ersetze_luecke, html)
 
     # Zeilenumbrüche in <br> konvertieren
