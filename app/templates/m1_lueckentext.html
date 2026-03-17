@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modul 1 – Lückentext</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <a class="logo" href="/test/{{ token }}">DaF Sprachdiagnostik <span>v2</span></a>
+      <span style="font-size:0.85rem;color:var(--text-muted)">Modul 1 von 6</span>
+    </div>
+    <div style="max-width:800px;margin:0 auto;padding:0 1rem">
+      <div class="progress-bar"><div class="progress-bar-fill" style="width:16%"></div></div>
+    </div>
+  </header>
+
+  <main class="container" style="padding-top:2rem;padding-bottom:4rem">
+
+    <!-- Ladeansicht -->
+    <div id="loading" style="text-align:center;padding:3rem">
+      <div class="spinner"></div>
+      <p style="color:var(--text-muted)">Text wird geladen…</p>
+    </div>
+
+    <!-- Hauptansicht -->
+    <div id="content" style="display:none">
+      <div style="margin-bottom:1.5rem">
+        <h1 style="font-size:1.5rem;font-weight:700;margin-bottom:0.4rem">📝 Lückentext</h1>
+        <p style="color:var(--text-muted);font-size:0.9rem">
+          Lesen Sie den Text und ergänzen Sie die fehlenden Wörter. 
+          Die erste(n) Buchstabe(n) sind als Hilfe angegeben.
+        </p>
+      </div>
+
+      <div class="alert alert-info" style="margin-bottom:1.5rem">
+        <strong>Hinweis:</strong> Schreiben Sie die Wörter genau so, wie sie im Text passen.
+        Groß- und Kleinschreibung wird nicht bewertet.
+      </div>
+
+      <div class="card">
+        <h2 class="card-title" id="text-titel"></h2>
+        <div class="lueckentext-container" id="lueckentext"></div>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem">
+        <span id="fortschritt" style="font-size:0.85rem;color:var(--text-muted)"></span>
+        <button class="btn btn-primary btn-lg" id="submit-btn" onclick="submitAntworten()" disabled>
+          Auswerten →
+        </button>
+      </div>
+    </div>
+
+    <!-- Auswertungsansicht -->
+    <div id="auswertung" style="display:none">
+      <div style="text-align:center;padding:2rem 0">
+        <div class="spinner"></div>
+        <p style="color:var(--text-muted)">Ihre Antworten werden ausgewertet…</p>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    const TOKEN = '{{ token }}';
+    let loesungen = [];
+    let anzahlLuecken = 0;
+
+    async function ladeText() {
+      try {
+        const res = await fetch(`/api/m1/${TOKEN}/text`);
+        if (!res.ok) throw new Error('Fehler beim Laden');
+        const data = await res.json();
+
+        anzahlLuecken = data.anzahl_luecken;
+        document.getElementById('text-titel').textContent = data.titel;
+        document.getElementById('lueckentext').innerHTML = data.html_text;
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('content').style.display = 'block';
+
+        aktualisiereForschritt();
+        bindInputEvents();
+      } catch (e) {
+        document.getElementById('loading').innerHTML = `
+          <p style="color:var(--danger)">Fehler beim Laden des Textes. 
+          <a href="/test/${TOKEN}">Zurück zur Übersicht</a></p>`;
+      }
+    }
+
+    function bindInputEvents() {
+      const inputs = document.querySelectorAll('.luecke-input');
+      inputs.forEach(input => {
+        input.addEventListener('input', aktualisiereForschritt);
+        input.addEventListener('keydown', e => {
+          if (e.key === 'Enter') {
+            // Zum nächsten Input springen
+            const alle = Array.from(document.querySelectorAll('.luecke-input'));
+            const idx = alle.indexOf(e.target);
+            if (idx < alle.length - 1) alle[idx + 1].focus();
+          }
+        });
+      });
+    }
+
+    function aktualisiereForschritt() {
+      const inputs = document.querySelectorAll('.luecke-input');
+      const ausgefuellt = Array.from(inputs).filter(i => i.value.trim().length > 0).length;
+      const gesamt = inputs.length;
+
+      document.getElementById('fortschritt').textContent =
+        `${ausgefuellt} von ${gesamt} Lücken ausgefüllt`;
+
+      document.getElementById('submit-btn').disabled = ausgefuellt === 0;
+    }
+
+    async function submitAntworten() {
+      const btn = document.getElementById('submit-btn');
+      btn.disabled = true;
+      btn.textContent = 'Wird ausgewertet…';
+
+      // Antworten sammeln
+      const antworten = {};
+      document.querySelectorAll('.luecke-input').forEach(input => {
+        const nr = input.dataset.nr;
+        antworten[nr] = input.value.trim();
+      });
+
+      // Auswertungsansicht zeigen
+      document.getElementById('content').style.display = 'none';
+      document.getElementById('auswertung').style.display = 'block';
+
+      try {
+        const res = await fetch(`/api/m1/${TOKEN}/submit`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ antworten }),
+        });
+
+        if (!res.ok) throw new Error('Auswertungsfehler');
+        const data = await res.json();
+
+        // Ergebnisse anzeigen
+        zeigeErgebnis(data, antworten);
+      } catch (e) {
+        document.getElementById('auswertung').innerHTML = `
+          <div class="alert alert-warning">
+            Fehler bei der Auswertung. 
+            <a href="/test/${TOKEN}">Zurück zur Übersicht</a>
+          </div>`;
+      }
+    }
+
+    function zeigeErgebnis(data, antworten) {
+      const prozent = data.gesamt_score;
+      const niveau = data.grob_niveau;
+
+      let html = `
+        <div style="text-align:center;margin-bottom:2rem">
+          <div style="font-size:3rem;margin-bottom:0.5rem">
+            ${prozent >= 70 ? '🎉' : prozent >= 50 ? '👍' : '📚'}
+          </div>
+          <h2 style="font-size:1.5rem;font-weight:700;margin-bottom:0.5rem">
+            ${prozent}% korrekt
+          </h2>
+          <p style="color:var(--text-muted)">
+            Geschätztes Niveau: <span class="niveau-badge">${niveau}</span>
+          </p>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title">Ihr Skill-Profil (Schritte plus Neu)</h3>
+          <div class="skill-grid" id="skill-grid"></div>
+        </div>
+      `;
+
+      if (data.staerken && data.staerken.length > 0) {
+        html += `
+          <div class="card">
+            <h3 class="card-title">✅ Ihre Stärken</h3>
+            ${data.staerken.map(s => `
+              <div style="display:flex;justify-content:space-between;padding:0.4rem 0;border-bottom:1px solid var(--border);font-size:0.9rem">
+                <span>${s.titel}</span>
+                <span style="color:var(--success);font-weight:600">${s.score_prozent}%</span>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }
+
+      if (data.empfehlungen && data.empfehlungen.length > 0) {
+        html += `
+          <div class="card">
+            <h3 class="card-title">📋 Empfohlene Kursmodule</h3>
+            <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:1rem">
+              Basierend auf Ihren Ergebnissen empfehlen wir Ihnen folgende gezielten Kursmodule 
+              aus <strong>Hueber Schritte plus Neu</strong>:
+            </p>
+            ${data.empfehlungen.map(e => `
+              <div class="empfehlung-card ${e.prioritaet}">
+                <div class="empfehlung-titel">${e.titel}</div>
+                <div class="empfehlung-meta">
+                  Band ${e.band} · Lektionen ${e.lektionen} · Niveau ${e.niveau} · Score: ${e.score_prozent}%
+                </div>
+                <div class="empfehlung-beschreibung">${e.kurzbeschreibung}</div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }
+
+      html += `
+        <div style="text-align:center;margin-top:1.5rem">
+          <a href="/test/${TOKEN}" class="btn btn-primary btn-lg">
+            Weiter zu Modul 2 →
+          </a>
+        </div>
+      `;
+
+      document.getElementById('auswertung').innerHTML = html;
+
+      // Skill-Grid befüllen
+      renderSkillGrid(data.modul_scores);
+    }
+
+    function renderSkillGrid(modulScores) {
+      const MODUL_NAMEN = {
+        '1_1': {t:'Basis-Satzbau', n:'A1.1'},
+        '1_2': {t:'Artikel & Pronomen', n:'A1.1'},
+        '1_3': {t:'Präsens & trennb. Verben', n:'A1.1'},
+        '2_1': {t:'Akkusativ & Satzklammer', n:'A1.2'},
+        '2_2': {t:'Perfekt', n:'A1.2'},
+        '2_3': {t:'Präpositionen', n:'A1.2'},
+        '3_1': {t:'Dativ & Dativverben', n:'A2.1'},
+        '3_2': {t:'Nebensätze', n:'A2.1'},
+        '3_3': {t:'Perfekt komplett & Präteritum', n:'A2.1'},
+        '4_1': {t:'Relativsätze', n:'A2.2'},
+        '4_2': {t:'Konjunktiv II', n:'A2.2'},
+        '4_3': {t:'Infinitiv mit zu', n:'A2.2'},
+        'b1':  {t:'B1-Strukturen', n:'B1'},
+        'b2':  {t:'B2-Strukturen', n:'B2'},
+      };
+
+      const grid = document.getElementById('skill-grid');
+      if (!grid) return;
+
+      const html = Object.entries(modulScores).map(([id, score]) => {
+        const info = MODUL_NAMEN[id] || {t: id, n: ''};
+        const p = score.prozent;
+        const cls = p >= 70 ? 'hoch' : p >= 50 ? 'mittel' : 'niedrig';
+        return `
+          <div class="skill-item">
+            <div class="skill-item-header">
+              <span class="skill-item-titel">${info.t}</span>
+              <span class="skill-item-niveau">${info.n}</span>
+            </div>
+            <div class="skill-bar">
+              <div class="skill-bar-fill ${cls}" style="width:${p}%"></div>
+            </div>
+            <div class="skill-prozent">${score.richtig}/${score.gesamt} (${p}%)</div>
+          </div>
+        `;
+      }).join('');
+
+      grid.innerHTML = html;
+    }
+
+    ladeText();
+  </script>
+</body>
+</html>

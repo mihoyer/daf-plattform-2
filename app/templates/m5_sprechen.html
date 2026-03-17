@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modul 5 – Freies Sprechen</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <a class="logo" href="/test/{{ token }}">DaF Sprachdiagnostik <span>v2</span></a>
+      <span style="font-size:0.85rem;color:var(--text-muted)">Modul 5 von 6</span>
+    </div>
+    <div style="max-width:800px;margin:0 auto;padding:0 1rem">
+      <div class="progress-bar"><div class="progress-bar-fill" style="width:83%"></div></div>
+    </div>
+  </header>
+
+  <main class="container" style="padding-top:2rem;padding-bottom:4rem">
+    <div id="loading" style="text-align:center;padding:3rem">
+      <div class="spinner"></div>
+      <p style="color:var(--text-muted)">Aufgabe wird geladen…</p>
+    </div>
+
+    <div id="content" style="display:none">
+      <h1 style="font-size:1.5rem;font-weight:700;margin-bottom:0.4rem">💬 Freies Sprechen</h1>
+      <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:1.5rem">
+        Sprechen Sie ca. 1–2 Minuten zu der folgenden Aufgabe.
+      </p>
+
+      <div class="card">
+        <h3 class="card-title">Ihre Aufgabe</h3>
+        <div id="aufgabe" style="font-size:1.05rem;font-weight:500;padding:1rem;background:#eff6ff;border-radius:8px;border-left:4px solid var(--primary)"></div>
+      </div>
+
+      <div class="card">
+        <h3 class="card-title">Aufnahme</h3>
+        <div id="aufnahme-status" class="alert alert-info">Klicken Sie auf "Aufnahme starten".</div>
+        <div style="display:flex;gap:1rem;margin-top:1rem;flex-wrap:wrap">
+          <button class="btn btn-primary" id="start-btn" onclick="startAufnahme()">🎙️ Aufnahme starten</button>
+          <button class="btn btn-outline" id="stop-btn" onclick="stopAufnahme()" disabled>⏹️ Aufnahme stoppen</button>
+        </div>
+        <audio id="preview" controls style="width:100%;margin-top:1rem;display:none"></audio>
+      </div>
+
+      <div style="text-align:right;margin-top:1rem">
+        <button class="btn btn-primary btn-lg" id="submit-btn" onclick="submitAufnahme()" disabled>
+          Absenden →
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const TOKEN = '{{ token }}';
+    let mediaRecorder = null, chunks = [], audioBlob = null;
+
+    function getBestMimeType() {
+      for (const t of ['audio/mp4','audio/webm;codecs=opus','audio/webm','audio/ogg']) {
+        if (MediaRecorder.isTypeSupported(t)) return t;
+      }
+      return '';
+    }
+
+    async function ladeAufgabe() {
+      const res = await fetch(`/api/m5/${TOKEN}/aufgabe`);
+      if (!res.ok) { window.location.href = `/test/${TOKEN}`; return; }
+      const data = await res.json();
+      document.getElementById('aufgabe').textContent = data.aufgabe;
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('content').style.display = 'block';
+    }
+
+    async function startAufnahme() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mimeType = getBestMimeType();
+        mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+        chunks = [];
+        mediaRecorder.ondataavailable = e => chunks.push(e.data);
+        mediaRecorder.onstop = () => {
+          audioBlob = new Blob(chunks, { type: mediaRecorder.mimeType });
+          const preview = document.getElementById('preview');
+          preview.src = URL.createObjectURL(audioBlob);
+          preview.style.display = 'block';
+          document.getElementById('submit-btn').disabled = false;
+          document.getElementById('aufnahme-status').innerHTML = '✅ Aufnahme gespeichert.';
+          document.getElementById('aufnahme-status').className = 'alert alert-success';
+        };
+        mediaRecorder.start();
+        document.getElementById('start-btn').disabled = true;
+        document.getElementById('stop-btn').disabled = false;
+        document.getElementById('aufnahme-status').innerHTML = '🔴 Aufnahme läuft…';
+        document.getElementById('aufnahme-status').className = 'alert alert-warning';
+      } catch (e) {
+        document.getElementById('aufnahme-status').innerHTML = '⚠️ Mikrofon nicht verfügbar.';
+      }
+    }
+
+    function stopAufnahme() {
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+        mediaRecorder.stream.getTracks().forEach(t => t.stop());
+      }
+      document.getElementById('start-btn').disabled = false;
+      document.getElementById('stop-btn').disabled = true;
+    }
+
+    async function submitAufnahme() {
+      if (!audioBlob) return;
+      const btn = document.getElementById('submit-btn');
+      btn.disabled = true;
+      btn.textContent = 'Wird analysiert…';
+      const ext = audioBlob.type.includes('mp4') ? '.mp4' : '.webm';
+      const formData = new FormData();
+      formData.append('audio', audioBlob, `aufnahme${ext}`);
+      const res = await fetch(`/api/m5/${TOKEN}/submit`, { method: 'POST', body: formData });
+      if (res.ok) window.location.href = `/test/${TOKEN}`;
+      else { btn.disabled = false; btn.textContent = 'Absenden →'; }
+    }
+
+    ladeAufgabe();
+  </script>
+</body>
+</html>

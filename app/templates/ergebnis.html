@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ihr Testergebnis – DaF Sprachdiagnostik</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <a class="logo" href="/">DaF Sprachdiagnostik <span>v2</span></a>
+      <span id="niveau-badge" class="niveau-badge" style="display:none"></span>
+    </div>
+  </header>
+
+  <main class="container" style="padding-top:2rem;padding-bottom:4rem">
+    <div id="loading" style="text-align:center;padding:3rem">
+      <div class="spinner"></div>
+      <p style="color:var(--text-muted)">Ergebnisse werden geladen…</p>
+    </div>
+
+    <div id="content" style="display:none">
+
+      <!-- Kopfzeile -->
+      <div style="text-align:center;margin-bottom:2.5rem">
+        <div style="font-size:3.5rem;margin-bottom:0.5rem" id="ergebnis-emoji">🎓</div>
+        <h1 style="font-size:2rem;font-weight:800;margin-bottom:0.5rem">Ihr Sprachprofil</h1>
+        <p style="color:var(--text-muted);font-size:1rem">
+          Basierend auf Ihrem Einstufungstest – Hueber Schritte plus Neu
+        </p>
+        <div style="margin-top:1rem">
+          <span style="font-size:1.1rem;color:var(--text-muted)">Geschätztes Niveau: </span>
+          <span id="niveau-gross" class="niveau-badge" style="font-size:1.2rem;padding:0.4rem 1.2rem"></span>
+        </div>
+      </div>
+
+      <!-- Skill-Radar -->
+      <div class="card">
+        <h2 class="card-title">Skill-Profil (Grammatikbereiche)</h2>
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:1rem">
+          Jede Achse entspricht einem Grammatikmodul aus Schritte plus Neu.
+          Grün = beherrscht (≥70%), Gelb = in Entwicklung (50–69%), Rot = Förderbedarf (&lt;50%).
+        </p>
+        <div style="max-width:500px;margin:0 auto">
+          <canvas id="radar-chart"></canvas>
+        </div>
+      </div>
+
+      <!-- Skill-Grid -->
+      <div class="card">
+        <h2 class="card-title">Detailübersicht nach Modulen</h2>
+        <div class="skill-grid" id="skill-grid"></div>
+      </div>
+
+      <!-- Stärken -->
+      <div class="card" id="staerken-card" style="display:none">
+        <h2 class="card-title">✅ Ihre Stärken</h2>
+        <div id="staerken-liste"></div>
+      </div>
+
+      <!-- Empfehlungen -->
+      <div class="card" id="empfehlungen-card" style="display:none">
+        <h2 class="card-title">📋 Empfohlene Kursmodule</h2>
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:1.25rem">
+          Statt eines kompletten Kurses empfehlen wir Ihnen gezielt folgende Module aus
+          <strong>Hueber Schritte plus Neu</strong>. Module mit roter Markierung haben höchste Priorität.
+        </p>
+        <div id="empfehlungen-liste"></div>
+      </div>
+
+      <!-- Modul-Scores -->
+      <div class="card">
+        <h2 class="card-title">Ergebnisse aller Testmodule</h2>
+        <div id="modul-scores"></div>
+      </div>
+
+      <!-- Aktionen -->
+      <div style="text-align:center;margin-top:2rem;display:flex;gap:1rem;justify-content:center;flex-wrap:wrap">
+        <button class="btn btn-outline" onclick="window.print()">🖨️ Ergebnis drucken</button>
+        <a href="/" class="btn btn-primary">Neuen Test starten</a>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    const TOKEN = '{{ token }}';
+
+    const MODUL_NAMEN = {
+      '1_1': {t:'Basis-Satzbau', n:'A1.1', band:1, modul:1},
+      '1_2': {t:'Artikel & Pronomen', n:'A1.1', band:1, modul:2},
+      '1_3': {t:'Präsens & trennb. Verben', n:'A1.1', band:1, modul:3},
+      '2_1': {t:'Akkusativ & Satzklammer', n:'A1.2', band:2, modul:1},
+      '2_2': {t:'Perfekt', n:'A1.2', band:2, modul:2},
+      '2_3': {t:'Präpositionen', n:'A1.2', band:2, modul:3},
+      '3_1': {t:'Dativ & Dativverben', n:'A2.1', band:3, modul:1},
+      '3_2': {t:'Nebensätze', n:'A2.1', band:3, modul:2},
+      '3_3': {t:'Perfekt komplett & Präteritum', n:'A2.1', band:3, modul:3},
+      '4_1': {t:'Relativsätze', n:'A2.2', band:4, modul:1},
+      '4_2': {t:'Konjunktiv II', n:'A2.2', band:4, modul:2},
+      '4_3': {t:'Infinitiv mit zu', n:'A2.2', band:4, modul:3},
+    };
+
+    const TESTMODUL_NAMEN = {
+      m1_lueckentext: '📝 Lückentext',
+      m2_lesen: '📖 Leseverstehen',
+      m3_hoerverstehen: '🎧 Hörverstehen',
+      m4_vorlesen: '🗣️ Vorlesen',
+      m5_sprechen: '💬 Freies Sprechen',
+      m6_schreiben: '✍️ Schreiben',
+    };
+
+    async function ladeErgebnis() {
+      const res = await fetch(`/api/ergebnis/${TOKEN}`);
+      if (!res.ok) { window.location.href = '/'; return; }
+      const data = await res.json();
+
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('content').style.display = 'block';
+
+      const niveau = data.grob_niveau || 'A2';
+      document.getElementById('niveau-badge').textContent = niveau;
+      document.getElementById('niveau-badge').style.display = 'inline-block';
+      document.getElementById('niveau-gross').textContent = niveau;
+
+      const score = data.gesamt_score || 0;
+      document.getElementById('ergebnis-emoji').textContent =
+        score >= 70 ? '🎉' : score >= 50 ? '👍' : '📚';
+
+      renderSkillGrid(data.skill_scores);
+      renderRadarChart(data.skill_scores);
+      renderStaerken(data.staerken);
+      renderEmpfehlungen(data.empfehlungen);
+      renderModulScores(data.module);
+    }
+
+    function renderSkillGrid(skillScores) {
+      const grid = document.getElementById('skill-grid');
+      const reihenfolge = ['1_1','1_2','1_3','2_1','2_2','2_3','3_1','3_2','3_3','4_1','4_2','4_3'];
+      grid.innerHTML = reihenfolge
+        .filter(id => skillScores[id])
+        .map(id => {
+          const info = MODUL_NAMEN[id];
+          const score = skillScores[id];
+          const p = score.prozent;
+          const cls = p >= 70 ? 'hoch' : p >= 50 ? 'mittel' : 'niedrig';
+          return `
+            <div class="skill-item">
+              <div class="skill-item-header">
+                <span class="skill-item-titel">${info.t}</span>
+                <span class="skill-item-niveau">${info.n}</span>
+              </div>
+              <div class="skill-bar">
+                <div class="skill-bar-fill ${cls}" style="width:${p}%"></div>
+              </div>
+              <div class="skill-prozent">${score.richtig}/${score.gesamt} · ${p}%</div>
+            </div>
+          `;
+        }).join('');
+    }
+
+    function renderRadarChart(skillScores) {
+      const reihenfolge = ['1_1','1_2','1_3','2_1','2_2','2_3','3_1','3_2','3_3','4_1','4_2','4_3'];
+      const labels = [], werte = [], farben = [];
+
+      reihenfolge.forEach(id => {
+        if (!skillScores[id]) return;
+        const info = MODUL_NAMEN[id];
+        const p = skillScores[id].prozent;
+        labels.push(`${info.t}\n(${info.n})`);
+        werte.push(p);
+        farben.push(p >= 70 ? 'rgba(22,163,74,0.6)' : p >= 50 ? 'rgba(217,119,6,0.6)' : 'rgba(220,38,38,0.6)');
+      });
+
+      if (labels.length === 0) return;
+
+      new Chart(document.getElementById('radar-chart'), {
+        type: 'radar',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Ihr Skill-Profil',
+            data: werte,
+            backgroundColor: 'rgba(37,99,235,0.15)',
+            borderColor: 'rgba(37,99,235,0.8)',
+            borderWidth: 2,
+            pointBackgroundColor: werte.map(p => p >= 70 ? '#16a34a' : p >= 50 ? '#d97706' : '#dc2626'),
+            pointRadius: 5,
+          }]
+        },
+        options: {
+          scales: {
+            r: {
+              min: 0, max: 100,
+              ticks: { stepSize: 25, font: { size: 10 } },
+              pointLabels: { font: { size: 10 } },
+            }
+          },
+          plugins: { legend: { display: false } },
+        }
+      });
+    }
+
+    function renderStaerken(staerken) {
+      if (!staerken || staerken.length === 0) return;
+      document.getElementById('staerken-card').style.display = 'block';
+      document.getElementById('staerken-liste').innerHTML = staerken.map(s => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:0.6rem 0;border-bottom:1px solid var(--border)">
+          <div>
+            <span style="font-weight:500">${s.titel}</span>
+            <span style="font-size:0.8rem;color:var(--text-muted);margin-left:0.5rem">${s.niveau}</span>
+          </div>
+          <span style="color:var(--success);font-weight:700">${s.score_prozent}%</span>
+        </div>
+      `).join('');
+    }
+
+    function renderEmpfehlungen(empfehlungen) {
+      if (!empfehlungen || empfehlungen.length === 0) return;
+      document.getElementById('empfehlungen-card').style.display = 'block';
+      document.getElementById('empfehlungen-liste').innerHTML = empfehlungen.map(e => `
+        <div class="empfehlung-card ${e.prioritaet}">
+          <div class="empfehlung-titel">
+            Band ${e.band} · Modul ${e.modul_nr}: ${e.titel}
+          </div>
+          <div class="empfehlung-meta">
+            Lektionen ${e.lektionen} · Niveau ${e.niveau} · 
+            Ihr Score: <strong>${e.score_prozent}%</strong> · 
+            Priorität: <strong>${e.prioritaet === 'hoch' ? '🔴 Hoch' : '🟡 Mittel'}</strong>
+          </div>
+          <div class="empfehlung-beschreibung">${e.kurzbeschreibung}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderModulScores(module) {
+      if (!module) return;
+      document.getElementById('modul-scores').innerHTML = module.map(m => {
+        const name = TESTMODUL_NAMEN[m.modul] || m.modul;
+        const score = m.score !== null && m.score !== undefined ? `${Math.round(m.score)}%` : '–';
+        const niveau = m.niveau || '';
+        const statusFarbe = m.status === 'abgeschlossen' ? 'var(--success)' : 'var(--text-muted)';
+        return `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:0.75rem 0;border-bottom:1px solid var(--border)">
+            <div>
+              <span style="font-weight:500">${name}</span>
+              ${niveau ? `<span style="font-size:0.8rem;color:var(--text-muted);margin-left:0.5rem">${niveau}</span>` : ''}
+            </div>
+            <div style="text-align:right">
+              <span style="font-weight:700;color:${statusFarbe}">${score}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    ladeErgebnis();
+  </script>
+</body>
+</html>

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Einstufungstest – Übersicht</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <a class="logo" href="/">DaF Sprachdiagnostik <span>v2</span></a>
+      <span id="niveau-badge" style="display:none" class="niveau-badge"></span>
+    </div>
+  </header>
+
+  <main class="container" style="padding-top:2rem;padding-bottom:3rem">
+    <div id="loading" style="text-align:center;padding:3rem">
+      <div class="spinner"></div>
+      <p style="color:var(--text-muted)">Test wird geladen…</p>
+    </div>
+
+    <div id="content" style="display:none">
+      <h1 style="font-size:1.5rem;font-weight:700;margin-bottom:0.5rem">Ihr Einstufungstest</h1>
+      <p style="color:var(--text-muted);margin-bottom:1.5rem">Bitte bearbeiten Sie die Module in der angegebenen Reihenfolge.</p>
+
+      <div class="modul-steps" id="modul-steps"></div>
+
+      <div id="modul-cards"></div>
+    </div>
+  </main>
+
+  <script>
+    const TOKEN = '{{ token }}';
+    const MODUL_INFO = {
+      m1_lueckentext: { name: 'Lückentext', icon: '📝', url: '/m1/' },
+      m2_lesen:       { name: 'Leseverstehen', icon: '📖', url: '/m2/' },
+      m3_hoerverstehen: { name: 'Hörverstehen', icon: '🎧', url: '/m3/' },
+      m4_vorlesen:    { name: 'Vorlesen', icon: '🗣️', url: '/m4/' },
+      m5_sprechen:    { name: 'Sprechen', icon: '💬', url: '/m5/' },
+      m6_schreiben:   { name: 'Schreiben', icon: '✍️', url: '/m6/' },
+    };
+
+    async function ladeStatus() {
+      const res = await fetch(`/api/session/${TOKEN}/status`);
+      if (!res.ok) { window.location.href = '/'; return; }
+      const data = await res.json();
+
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('content').style.display = 'block';
+
+      if (data.grob_niveau) {
+        const badge = document.getElementById('niveau-badge');
+        badge.textContent = data.grob_niveau;
+        badge.style.display = 'inline-block';
+      }
+
+      // Wenn alle abgeschlossen → Ergebnis
+      const alleAbgeschlossen = data.module.every(m => ['abgeschlossen','fehler','uebersprungen'].includes(m.status));
+      if (alleAbgeschlossen) {
+        window.location.href = `/ergebnis/${TOKEN}`;
+        return;
+      }
+
+      renderModulSteps(data.module);
+      renderModulCards(data.module);
+    }
+
+    function renderModulSteps(module) {
+      const container = document.getElementById('modul-steps');
+      container.innerHTML = module.map((m, i) => {
+        const info = MODUL_INFO[m.modul] || {};
+        let cls = '';
+        if (m.status === 'abgeschlossen') cls = 'fertig';
+        else if (m.status === 'laufend') cls = 'aktiv';
+        return `<div class="modul-step ${cls}">${info.icon || ''}<br>${info.name || m.modul}</div>`;
+      }).join('');
+    }
+
+    function renderModulCards(module) {
+      const container = document.getElementById('modul-cards');
+      let naechstesGefunden = false;
+
+      container.innerHTML = module.map((m, i) => {
+        const info = MODUL_INFO[m.modul] || {};
+        const istNaechstes = !naechstesGefunden && m.status === 'ausstehend';
+        if (istNaechstes) naechstesGefunden = true;
+
+        let statusText = '';
+        let statusColor = '';
+        let btnHtml = '';
+
+        if (m.status === 'abgeschlossen') {
+          statusText = '✓ Abgeschlossen';
+          statusColor = 'var(--success)';
+        } else if (m.status === 'laufend') {
+          statusText = '▶ Läuft gerade';
+          statusColor = 'var(--warning)';
+          btnHtml = `<a href="${info.url}${TOKEN}" class="btn btn-primary">Fortsetzen →</a>`;
+        } else if (istNaechstes) {
+          statusText = 'Bereit';
+          statusColor = 'var(--primary)';
+          btnHtml = `<a href="${info.url}${TOKEN}" class="btn btn-primary">Starten →</a>`;
+        } else {
+          statusText = 'Ausstehend';
+          statusColor = 'var(--text-muted)';
+          btnHtml = `<button class="btn btn-outline" disabled>Noch nicht verfügbar</button>`;
+        }
+
+        return `
+          <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:1rem">
+            <div>
+              <div style="font-size:1.5rem;margin-bottom:0.25rem">${info.icon || ''}</div>
+              <div style="font-weight:600">Modul ${i+1}: ${info.name || m.modul}</div>
+              <div style="font-size:0.8rem;color:${statusColor};margin-top:0.2rem">${statusText}</div>
+            </div>
+            <div>${btnHtml}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    ladeStatus();
+  </script>
+</body>
+</html>

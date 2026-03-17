@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modul 2 – Leseverstehen</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <a class="logo" href="/test/{{ token }}">DaF Sprachdiagnostik <span>v2</span></a>
+      <span style="font-size:0.85rem;color:var(--text-muted)">Modul 2 von 6</span>
+    </div>
+    <div style="max-width:800px;margin:0 auto;padding:0 1rem">
+      <div class="progress-bar"><div class="progress-bar-fill" style="width:33%"></div></div>
+    </div>
+  </header>
+
+  <main class="container" style="padding-top:2rem;padding-bottom:4rem">
+    <div id="loading" style="text-align:center;padding:3rem">
+      <div class="spinner"></div>
+      <p style="color:var(--text-muted)">Text wird generiert…</p>
+    </div>
+
+    <div id="content" style="display:none">
+      <div style="margin-bottom:1.5rem">
+        <h1 style="font-size:1.5rem;font-weight:700;margin-bottom:0.4rem">📖 Leseverstehen</h1>
+        <p style="color:var(--text-muted);font-size:0.9rem">Lesen Sie den Text und beantworten Sie die Fragen.</p>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title" id="text-titel"></h2>
+        <div id="lesetext" style="line-height:1.8;font-size:1rem"></div>
+      </div>
+
+      <div class="card">
+        <h3 class="card-title">Fragen zum Text</h3>
+        <div id="fragen"></div>
+      </div>
+
+      <div style="text-align:right;margin-top:1rem">
+        <button class="btn btn-primary btn-lg" id="submit-btn" onclick="submitAntworten()">
+          Auswerten →
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const TOKEN = '{{ token }}';
+    let fragenDaten = [];
+
+    async function ladeText() {
+      const res = await fetch(`/api/m2/${TOKEN}/text`);
+      if (!res.ok) { window.location.href = `/test/${TOKEN}`; return; }
+      const data = await res.json();
+
+      fragenDaten = data.fragen || [];
+      document.getElementById('text-titel').textContent = data.titel || 'Lesetext';
+      document.getElementById('lesetext').textContent = data.text || '';
+
+      const fragenHtml = fragenDaten.map((f, i) => `
+        <div style="margin-bottom:1.5rem">
+          <p style="font-weight:600;margin-bottom:0.5rem">${i+1}. ${f.frage}</p>
+          ${f.optionen.map((opt, j) => `
+            <label style="display:flex;align-items:center;gap:0.5rem;padding:0.4rem;cursor:pointer;border-radius:6px;margin-bottom:0.25rem"
+              onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background=''">
+              <input type="radio" name="frage_${i}" value="${j}" style="cursor:pointer">
+              <span style="font-size:0.9rem">${opt}</span>
+            </label>
+          `).join('')}
+        </div>
+      `).join('');
+
+      document.getElementById('fragen').innerHTML = fragenHtml;
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('content').style.display = 'block';
+    }
+
+    async function submitAntworten() {
+      const btn = document.getElementById('submit-btn');
+      btn.disabled = true;
+      btn.textContent = 'Wird ausgewertet…';
+
+      const antworten = {};
+      fragenDaten.forEach((_, i) => {
+        const selected = document.querySelector(`input[name="frage_${i}"]:checked`);
+        antworten[String(i)] = selected ? parseInt(selected.value) : -1;
+      });
+
+      const res = await fetch(`/api/m2/${TOKEN}/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ antworten }),
+      });
+
+      if (res.ok) {
+        window.location.href = `/test/${TOKEN}`;
+      } else {
+        btn.disabled = false;
+        btn.textContent = 'Auswerten →';
+      }
+    }
+
+    ladeText();
+  </script>
+</body>
+</html>

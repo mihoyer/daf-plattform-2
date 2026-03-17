@@ -1,0 +1,7 @@
+# Omas Geburtstag bei Familie Berger
+
+**Aufgabe:** Lies den Text und ergänze die fehlenden Wörter. Die Anfangsbuchstaben helfen dir.
+
+---
+
+Die Familie Berger __f____¹⁾ heute einen besonderen Tag. Es __i____²⁾ der Geburtstag von Oma Helga. Alle __s____³⁾ schon früh aufgestanden. Herr Berger __d____⁴⁾ den Tisch __e____⁵⁾. Frau Berger __b____⁶⁾ einen Kuchen. Die Kinder, Anna und Max, __h____⁷⁾ gestern schon die Geschenke __e____⁸⁾. Oma Helga __h____⁹⁾ sich sehr __g____¹⁰⁾. Sie __w____¹¹⁾ die ganze Familie __t____¹²⁾ und __h____¹³⁾ sich auf die Feier. Die Sonne __h____¹⁴⁾ schon den ganzen Morgen __g____¹⁵⁾. Anna __f____¹⁶⁾ auf die Party. Sie __h____¹⁷⁾ ihrer Oma ein Bild __g____¹⁸⁾. Max __f____¹⁹⁾ sich über die vielen Gäste. Er __w____²⁰⁾ nicht, __d____²¹⁾ so viele Leute __k____²²⁾. Wenn er __k____²³⁾ könnte, __w____²⁴⁾ er den ganzen Tag nur spielen. Es __w____²⁵⁾ schön, __m____²⁶⁾ zu können. Das Geschenk, __d____²⁷⁾ Oma Helga am besten __g____²⁸⁾, war ein Fotoalbum. Die Geschenke __w____²⁹⁾ von den Kindern __a____³⁰⁾. Obwohl es __r____³¹⁾ hat, __m____³²⁾ die Stimmung sehr gut. Die Familie __k____³³⁾ zusammen lachen und singen. Ein Lied, __d____³⁴⁾ alle __k____³⁵⁾, wurde gesungen. Die __V____³⁶⁾ der Familie war sehr herzlich. Die __l____³⁷⁾ Gäste __u____³⁸⁾ noch lange zusammen. Das __F____³⁹⁾ des Tages __w____⁴⁰⁾ von allen __g____⁴¹⁾. Die __B____⁴²⁾ des Festes blieb allen in guter Erinnerung.

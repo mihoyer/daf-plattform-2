@@ -1,0 +1,106 @@
+"""
+DaF Sprachdiagnostik v2 – Hauptanwendung
+FastAPI + SQLite + OpenAI
+"""
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
+
+from app.config import settings
+from app.models.database import init_db
+from app.routers.main_router import router as main_router
+from app.routers.admin_router import router as admin_router
+from app.routers.kandidaten_router import router as kandidaten_router
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_db()
+    yield
+
+
+app = FastAPI(
+    title="DaF Sprachdiagnostik v2",
+    version="2.0.0",
+    lifespan=lifespan,
+    docs_url="/api/docs" if settings.debug else None,
+    redoc_url=None,
+)
+
+app.add_middleware(SessionMiddleware, secret_key=settings.secret_key)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+templates = Jinja2Templates(directory="app/templates")
+
+app.include_router(main_router)
+app.include_router(admin_router)
+app.include_router(kandidaten_router)
+
+
+# ── Frontend-Routen ──────────────────────────────────────────────────────────
+
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
+
+
+@app.get("/test/{token}", response_class=HTMLResponse)
+async def test_start(request: Request, token: str):
+    return templates.TemplateResponse("test.html", {"request": request, "token": token})
+
+
+@app.get("/m1/{token}", response_class=HTMLResponse)
+async def m1_seite(request: Request, token: str):
+    return templates.TemplateResponse("m1_lueckentext.html", {"request": request, "token": token})
+
+
+@app.get("/m2/{token}", response_class=HTMLResponse)
+async def m2_seite(request: Request, token: str):
+    return templates.TemplateResponse("m2_lesen.html", {"request": request, "token": token})
+
+
+@app.get("/m3/{token}", response_class=HTMLResponse)
+async def m3_seite(request: Request, token: str):
+    return templates.TemplateResponse("m3_hoerverstehen.html", {"request": request, "token": token})
+
+
+@app.get("/m4/{token}", response_class=HTMLResponse)
+async def m4_seite(request: Request, token: str):
+    return templates.TemplateResponse("m4_vorlesen.html", {"request": request, "token": token})
+
+
+@app.get("/m5/{token}", response_class=HTMLResponse)
+async def m5_seite(request: Request, token: str):
+    return templates.TemplateResponse("m5_sprechen.html", {"request": request, "token": token})
+
+
+@app.get("/m6/{token}", response_class=HTMLResponse)
+async def m6_seite(request: Request, token: str):
+    return templates.TemplateResponse("m6_schreiben.html", {"request": request, "token": token})
+
+
+@app.get("/ergebnis/{token}", response_class=HTMLResponse)
+async def ergebnis_seite(request: Request, token: str):
+    return templates.TemplateResponse("ergebnis.html", {"request": request, "token": token})
+
+
+@app.get("/admin/login", response_class=HTMLResponse)
+async def admin_login_seite(request: Request):
+    return templates.TemplateResponse("admin_login.html", {"request": request})
+
+
+@app.get("/admin/dashboard", response_class=HTMLResponse)
+async def admin_dashboard_seite(request: Request):
+    return templates.TemplateResponse("admin_dashboard.html", {"request": request})
